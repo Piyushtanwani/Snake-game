@@ -106,7 +106,6 @@ private:
 
     void draw() {
 #ifdef _WIN32
-
         COORD coord;
         coord.X = 0;
         coord.Y = 0;
