@@ -64,6 +64,7 @@ private:
 #ifdef _WIN32
         gameWidth = 50;
         gameHeight = 20;
+        system("chcp 65001 > nul");
 #else
         initscr();
         noecho();
@@ -105,18 +106,37 @@ private:
 
     void draw() {
 #ifdef _WIN32
-        system("cls");
+        COORD coord;
+        coord.X = 0;
+        coord.Y = 0;
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        
         for (int y = 0; y < gameHeight + 2; ++y) {
             for (int x = 0; x < gameWidth + 2; ++x) {
-                if (y == 0 || y == gameHeight + 1 || x == 0 || x == gameWidth + 1)
-                    std::cout << "#";
+                if (y == 0 && x == 0)
+                    std::cout << "╔";
+                else if (y == 0 && x == gameWidth + 1)
+                    std::cout << "╗";
+                else if (y == gameHeight + 1 && x == 0)
+                    std::cout << "╚";
+                else if (y == gameHeight + 1 && x == gameWidth + 1)
+                    std::cout << "╝";
+                else if (y == 0 || y == gameHeight + 1)
+                    std::cout << "═";
+                else if (x == 0 || x == gameWidth + 1)
+                    std::cout << "║";
                 else if (x == food.x && y == food.y)
-                    std::cout << "O";
+                    std::cout << "●";
                 else {
                     bool printed = false;
-                    for (auto& s : snake) {
-                        if (s.x == x && s.y == y) {
-                            std::cout << "X";
+                    for (size_t i = 0; i < snake.size(); ++i) {
+                        if (snake[i].x == x && snake[i].y == y) {
+                            if (i == 0)
+                                std::cout << "◉";
+                            else if (i == snake.size() - 1)
+                                std::cout << "○";
+                            else
+                                std::cout << "○";
                             printed = true;
                             break;
                         }
@@ -126,20 +146,36 @@ private:
             }
             std::cout << std::endl;
         }
+
         std::cout << "Score: " << score << std::endl;
 #else
-        clear();
+
         for (int y = 0; y < gameHeight + 2; ++y) {
             for (int x = 0; x < gameWidth + 2; ++x) {
-                if (y == 0 || y == gameHeight + 1 || x == 0 || x == gameWidth + 1)
-                    mvaddch(y, x, '#');
+                if (y == 0 && x == 0)
+                    mvaddch(y, x, ACS_ULCORNER);
+                else if (y == 0 && x == gameWidth + 1)
+                    mvaddch(y, x, ACS_URCORNER);
+                else if (y == gameHeight + 1 && x == 0)
+                    mvaddch(y, x, ACS_LLCORNER);
+                else if (y == gameHeight + 1 && x == gameWidth + 1)
+                    mvaddch(y, x, ACS_LRCORNER);
+                else if (y == 0 || y == gameHeight + 1)
+                    mvaddch(y, x, ACS_HLINE);
+                else if (x == 0 || x == gameWidth + 1)
+                    mvaddch(y, x, ACS_VLINE);
                 else if (x == food.x && y == food.y)
                     mvaddch(y, x, 'O');
                 else {
                     bool printed = false;
-                    for (auto& s : snake) {
-                        if (s.x == x && s.y == y) {
-                            mvaddch(y, x, 'X');
+                    for (size_t i = 0; i < snake.size(); ++i) {
+                        if (snake[i].x == x && snake[i].y == y) {
+                            if (i == 0)
+                                mvaddch(y, x, '@');
+                            else if (i == snake.size() - 1)
+                                mvaddch(y, x, 'o');
+                            else
+                                mvaddch(y, x, 'o');
                             printed = true;
                             break;
                         }
@@ -148,7 +184,7 @@ private:
                 }
             }
         }
-        mvprintw(gameHeight + 3, 0, "Score: %d", score);
+        mvprintw(gameHeight + 3, 0, "Score: %d  ", score);
         refresh();
 #endif
     }
