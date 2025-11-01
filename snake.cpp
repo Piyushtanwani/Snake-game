@@ -1,8 +1,17 @@
+#ifdef _WIN32
+#include <conio.h>
+#include <windows.h>
+#else
 #include <ncurses.h>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#endif
+
 #include <vector>
 #include <cstdlib>
 #include <ctime>
-#include <unistd.h>
+#include <iostream>
 
 class Position {
 public:
@@ -22,19 +31,62 @@ private:
     int gameWidth, gameHeight;
     bool gameOver;
 
+#ifdef _WIN32
+    void sleep_ms(int ms) { Sleep(ms); }
+#else
+    void sleep_ms(int ms) { usleep(ms * 1000); }
+#endif
+
+#ifndef _WIN32
+    int kbhit(void) {
+        struct termios oldt, newt;
+        int ch;
+        int oldf;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+        ch = getchar();
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        fcntl(STDIN_FILENO, F_SETFL, oldf);
+        if (ch != EOF) {
+            ungetc(ch, stdin);
+            return 1;
+        }
+        return 0;
+    }
+#endif
+
     void initGame() {
         srand(time(nullptr));
+#ifdef _WIN32
+        gameWidth = 50;
+        gameHeight = 20;
+#else
+        initscr();
+        noecho();
+        curs_set(0);
+        keypad(stdscr, TRUE);
+        nodelay(stdscr, TRUE);
         gameWidth = COLS - 2;
         gameHeight = LINES - 4;
-
+#endif
         snake.clear();
         snake.push_back(Position(gameWidth / 2, gameHeight / 2));
-
         direction = Position(1, 0);
         score = 0;
         gameOver = false;
-
         generateFood();
+    }
+
+    void endGame() {
+#ifndef _WIN32
+        nodelay(stdscr, FALSE);
+        endwin();
+#endif
+        std::cout << "\nGame Over! Final Score: " << score << std::endl;
     }
 
     void generateFood() {
@@ -45,22 +97,96 @@ private:
     }
 
     bool isSnakePosition(const Position& pos) {
-        for (const auto& segment : snake) {
-            if (segment == pos) return true;
+        for (const auto& s : snake) {
+            if (s == pos) return true;
         }
         return false;
     }
 
-    void moveSnake() {
-        Position newHead = snake[0];
+    void draw() {
+#ifdef _WIN32
+        system("cls");
+        for (int y = 0; y < gameHeight + 2; ++y) {
+            for (int x = 0; x < gameWidth + 2; ++x) {
+                if (y == 0 || y == gameHeight + 1 || x == 0 || x == gameWidth + 1)
+                    std::cout << "#";
+                else if (x == food.x && y == food.y)
+                    std::cout << "O";
+                else {
+                    bool printed = false;
+                    for (auto& s : snake) {
+                        if (s.x == x && s.y == y) {
+                            std::cout << "X";
+                            printed = true;
+                            break;
+                        }
+                    }
+                    if (!printed) std::cout << " ";
+                }
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "Score: " << score << std::endl;
+#else
+        clear();
+        for (int y = 0; y < gameHeight + 2; ++y) {
+            for (int x = 0; x < gameWidth + 2; ++x) {
+                if (y == 0 || y == gameHeight + 1 || x == 0 || x == gameWidth + 1)
+                    mvaddch(y, x, '#');
+                else if (x == food.x && y == food.y)
+                    mvaddch(y, x, 'O');
+                else {
+                    bool printed = false;
+                    for (auto& s : snake) {
+                        if (s.x == x && s.y == y) {
+                            mvaddch(y, x, 'X');
+                            printed = true;
+                            break;
+                        }
+                    }
+                    if (!printed) mvaddch(y, x, ' ');
+                }
+            }
+        }
+        mvprintw(gameHeight + 3, 0, "Score: %d", score);
+        refresh();
+#endif
+    }
+
+    void input() {
+#ifdef _WIN32
+        if (_kbhit()) {
+            char c = _getch();
+            switch (c) {
+                case 'w': if (direction.y != 1) direction = Position(0, -1); break;
+                case 's': if (direction.y != -1) direction = Position(0, 1); break;
+                case 'a': if (direction.x != 1) direction = Position(-1, 0); break;
+                case 'd': if (direction.x != -1) direction = Position(1, 0); break;
+                case 'x': gameOver = true; break;
+            }
+        }
+#else
+        int c = getch();
+        switch (c) {
+            case KEY_UP: if (direction.y != 1) direction = Position(0, -1); break;
+            case KEY_DOWN: if (direction.y != -1) direction = Position(0, 1); break;
+            case KEY_LEFT: if (direction.x != 1) direction = Position(-1, 0); break;
+            case KEY_RIGHT: if (direction.x != -1) direction = Position(1, 0); break;
+            case 'x': gameOver = true; break;
+        }
+#endif
+    }
+
+    void logic() {
+        Position newHead = snake.front();
         newHead.x += direction.x;
         newHead.y += direction.y;
 
-        if (newHead.x < 1 || newHead.x > gameWidth ||
-            newHead.y < 1 || newHead.y > gameHeight ||
-            isSnakePosition(newHead)) {
+        if (newHead.x <= 0 || newHead.x >= gameWidth + 1 || newHead.y <= 0 || newHead.y >= gameHeight + 1)
             gameOver = true;
-            return;
+
+        for (auto& s : snake) {
+            if (s == newHead) gameOver = true;
         }
 
         snake.insert(snake.begin(), newHead);
@@ -73,108 +199,22 @@ private:
         }
     }
 
-    void draw() {
-        clear();
-
-        box(stdscr, 0, 0);
-
-        mvprintw(0, 2, " SNAKE GAME ");
-        mvprintw(LINES - 1, 2, " Score: %d | Controls: WASD/Arrow Keys | Q to quit ", score);
-
-        for (const auto& segment : snake) {
-            mvaddch(segment.y, segment.x, '#');
-        }
-
-        mvaddch(food.y, food.x, '*');
-
-        if (gameOver) {
-            int msgY = LINES / 2;
-            int msgX = (COLS - 20) / 2;
-            mvprintw(msgY, msgX, "GAME OVER!");
-            mvprintw(msgY + 1, msgX, "Final Score: %d", score);
-            mvprintw(msgY + 2, msgX, "Press R to restart");
-        }
-
-        refresh();
-    }
-
-    void handleInput() {
-        int ch = getch();
-
-        switch (ch) {
-            case 'w': case 'W': case KEY_UP:
-                if (direction.y != 1) direction = Position(0, -1);
-                break;
-            case 's': case 'S': case KEY_DOWN:
-                if (direction.y != -1) direction = Position(0, 1);
-                break;
-            case 'a': case 'A': case KEY_LEFT:
-                if (direction.x != 1) direction = Position(-1, 0);
-                break;
-            case 'd': case 'D': case KEY_RIGHT:
-                if (direction.x != -1) direction = Position(1, 0);
-                break;
-            case 'q': case 'Q':
-                gameOver = true;
-                break;
-            case 'r': case 'R':
-                if (gameOver) {
-                    initGame();
-                }
-                break;
-        }
-    }
-
 public:
-    SnakeGame() {
-        initscr();
-        cbreak();
-        noecho();
-        nodelay(stdscr, TRUE);
-        keypad(stdscr, TRUE);
-        curs_set(0);
-
-        if (LINES < 10 || COLS < 30) {
-            endwin();
-            printf("Terminal too small! Minimum size: 30x10\n");
-            exit(1);
-        }
-
-        initGame();
-    }
-
-    ~SnakeGame() {
-        endwin();
-    }
-
     void run() {
-        while (true) {
-            handleInput();
-
-            if (!gameOver) {
-                moveSnake();
-            }
-
+        initGame();
+        while (!gameOver) {
             draw();
-
-            if (gameOver && getch() == 'q') {
-                break;
-            }
-
-            usleep(150000);
+            input();
+            logic();
+            sleep_ms(100);
         }
+        endGame();
     }
 };
 
 int main() {
-    try {
-        SnakeGame game;
-        game.run();
-    } catch (const std::exception& e) {
-        endwin();
-        printf("Error: %s\n", e.what());
-        return 1;
-    }
-
+    SnakeGame game;
+    game.run();
     return 0;
 }
+
