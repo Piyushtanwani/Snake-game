@@ -64,7 +64,16 @@ private:
 #ifdef _WIN32
         gameWidth = 50;
         gameHeight = 20;
-        system("chcp 65001 > nul");
+        
+        SetConsoleOutputCP(CP_UTF8);
+        
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_CURSOR_INFO cursorInfo;
+        GetConsoleCursorInfo(hOut, &cursorInfo);
+        cursorInfo.bVisible = false;
+        SetConsoleCursorInfo(hOut, &cursorInfo);
+        
+        system("cls");
 #else
         initscr();
         noecho();
@@ -83,7 +92,13 @@ private:
     }
 
     void endGame() {
-#ifndef _WIN32
+#ifdef _WIN32
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_CURSOR_INFO cursorInfo;
+        GetConsoleCursorInfo(hOut, &cursorInfo);
+        cursorInfo.bVisible = true;
+        SetConsoleCursorInfo(hOut, &cursorInfo);
+#else
         nodelay(stdscr, FALSE);
         endwin();
 #endif
@@ -106,50 +121,52 @@ private:
 
     void draw() {
 #ifdef _WIN32
-        COORD coord;
-        coord.X = 0;
-        coord.Y = 0;
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        COORD coord = {0, 0};
+        SetConsoleCursorPosition(hOut, coord);
+        
+        std::string buffer;
+        buffer.reserve((gameWidth + 3) * (gameHeight + 3));
         
         for (int y = 0; y < gameHeight + 2; ++y) {
             for (int x = 0; x < gameWidth + 2; ++x) {
                 if (y == 0 && x == 0)
-                    std::cout << "╔";
+                    buffer += "┏";
                 else if (y == 0 && x == gameWidth + 1)
-                    std::cout << "╗";
+                    buffer += "┓";
                 else if (y == gameHeight + 1 && x == 0)
-                    std::cout << "╚";
+                    buffer += "┗";
                 else if (y == gameHeight + 1 && x == gameWidth + 1)
-                    std::cout << "╝";
+                    buffer += "┛";
                 else if (y == 0 || y == gameHeight + 1)
-                    std::cout << "═";
+                    buffer += "━";
                 else if (x == 0 || x == gameWidth + 1)
-                    std::cout << "║";
+                    buffer += "┃";
                 else if (x == food.x && y == food.y)
-                    std::cout << "●";
+                    buffer += "*";
                 else {
                     bool printed = false;
                     for (size_t i = 0; i < snake.size(); ++i) {
                         if (snake[i].x == x && snake[i].y == y) {
                             if (i == 0)
-                                std::cout << "◉";
-                            else if (i == snake.size() - 1)
-                                std::cout << "○";
+                                buffer += "O";
                             else
-                                std::cout << "○";
+                                buffer += "o";
                             printed = true;
                             break;
                         }
                     }
-                    if (!printed) std::cout << " ";
+                    if (!printed) buffer += " ";
                 }
             }
-            std::cout << std::endl;
+            buffer += "\n";
         }
-
-        std::cout << "Score: " << score << std::endl;
+        
+        buffer += "Score: " + std::to_string(score) + "  Use Arrow Keys or WASD to move, X to exit";
+        
+        DWORD written;
+        WriteConsoleA(hOut, buffer.c_str(), buffer.length(), &written, NULL);
 #else
-
         for (int y = 0; y < gameHeight + 2; ++y) {
             for (int x = 0; x < gameWidth + 2; ++x) {
                 if (y == 0 && x == 0)
@@ -165,15 +182,13 @@ private:
                 else if (x == 0 || x == gameWidth + 1)
                     mvaddch(y, x, ACS_VLINE);
                 else if (x == food.x && y == food.y)
-                    mvaddch(y, x, 'O');
+                    mvaddch(y, x, '*');
                 else {
                     bool printed = false;
                     for (size_t i = 0; i < snake.size(); ++i) {
                         if (snake[i].x == x && snake[i].y == y) {
                             if (i == 0)
-                                mvaddch(y, x, '@');
-                            else if (i == snake.size() - 1)
-                                mvaddch(y, x, 'o');
+                                mvaddch(y, x, 'O');
                             else
                                 mvaddch(y, x, 'o');
                             printed = true;
@@ -192,23 +207,76 @@ private:
     void input() {
 #ifdef _WIN32
         if (_kbhit()) {
-            char c = _getch();
-            switch (c) {
-                case 'w': if (direction.y != 1) direction = Position(0, -1); break;
-                case 's': if (direction.y != -1) direction = Position(0, 1); break;
-                case 'a': if (direction.x != 1) direction = Position(-1, 0); break;
-                case 'd': if (direction.x != -1) direction = Position(1, 0); break;
-                case 'x': gameOver = true; break;
+            int c = _getch();
+            
+            if (c == 0 || c == 224) {
+                c = _getch(); 
+                switch (c) {
+                    case 72: 
+                        if (direction.y != 1) direction = Position(0, -1);
+                        break;
+                    case 80: 
+                        if (direction.y != -1) direction = Position(0, 1);
+                        break;
+                    case 75: 
+                        if (direction.x != 1) direction = Position(-1, 0);
+                        break;
+                    case 77: 
+                        if (direction.x != -1) direction = Position(1, 0);
+                        break;
+                }
+            } else {
+                switch (c) {
+                    case 'w':
+                    case 'W':
+                        if (direction.y != 1) direction = Position(0, -1);
+                        break;
+                    case 's':
+                    case 'S':
+                        if (direction.y != -1) direction = Position(0, 1);
+                        break;
+                    case 'a':
+                    case 'A':
+                        if (direction.x != 1) direction = Position(-1, 0);
+                        break;
+                    case 'd':
+                    case 'D':
+                        if (direction.x != -1) direction = Position(1, 0);
+                        break;
+                    case 'x':
+                    case 'X':
+                        gameOver = true;
+                        break;
+                }
             }
         }
 #else
         int c = getch();
         switch (c) {
-            case KEY_UP: if (direction.y != 1) direction = Position(0, -1); break;
-            case KEY_DOWN: if (direction.y != -1) direction = Position(0, 1); break;
-            case KEY_LEFT: if (direction.x != 1) direction = Position(-1, 0); break;
-            case KEY_RIGHT: if (direction.x != -1) direction = Position(1, 0); break;
-            case 'x': gameOver = true; break;
+            case KEY_UP:
+            case 'w':
+            case 'W':
+                if (direction.y != 1) direction = Position(0, -1);
+                break;
+            case KEY_DOWN:
+            case 's':
+            case 'S':
+                if (direction.y != -1) direction = Position(0, 1);
+                break;
+            case KEY_LEFT:
+            case 'a':
+            case 'A':
+                if (direction.x != 1) direction = Position(-1, 0);
+                break;
+            case KEY_RIGHT:
+            case 'd':
+            case 'D':
+                if (direction.x != -1) direction = Position(1, 0);
+                break;
+            case 'x':
+            case 'X':
+                gameOver = true;
+                break;
         }
 #endif
     }
@@ -253,4 +321,3 @@ int main() {
     game.run();
     return 0;
 }
-
