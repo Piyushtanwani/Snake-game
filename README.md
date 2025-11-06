@@ -365,12 +365,12 @@ snake.exe
 
 This project was developed collaboratively by a team of four graduate students:
 
-| Name | ID | Contributions |
-|------|------|---------------|
-| **[Manushri Thakkar]** | 202512122 |  |
-| **[Ruchita Patadiya]** | 202512070 |  |
-| **[Piyush Tanwani]** | 202512021 |  |
-| **[Aum Parmar]** | 202512004 |  |
+| Name | ID |
+|------|------|
+| **[Manushri Thakkar]** | 202512122 |  
+| **[Ruchita Patadiya]** | 202512070 |  
+| **[Piyush Tanwani]** | 202512021 |  
+| **[Aum Parmar]** | 202512004 |  
 
 ### Individual Contributions
 
