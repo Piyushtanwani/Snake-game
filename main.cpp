@@ -88,10 +88,10 @@ struct Position {
         if (c == 0 || c == -32) {  // 224 as signed char is -32
             c = _getch();
             switch (c) {
-                case 72: return 'w';  // Up arrow
-                case 80: return 's';  // Down arrow
-                case 77: return 'd';  // Right arrow
-                case 75: return 'a';  // Left arrow
+                case 72: return 'I';  // Up arrow
+                case 80: return 'K';  // Down arrow
+                case 77: return 'L';  // Right arrow
+                case 75: return 'J';  // Left arrow
             }
         }
         
@@ -170,10 +170,10 @@ struct Position {
             
             if (seq[0] == '[') {
                 switch (seq[1]) {
-                    case 'A': return 'w';  // Up arrow
-                    case 'B': return 's';  // Down arrow
-                    case 'C': return 'd';  // Right arrow
-                    case 'D': return 'a';  // Left arrow
+                    case 'A': return 'I';  // Up arrow
+                    case 'B': return 'K';  // Down arrow
+                    case 'C': return 'L';  // Right arrow
+                    case 'D': return 'J';  // Left arrow
                 }
             }
         }
@@ -217,13 +217,18 @@ private:
     deque<Position> body;
     Direction dir;
     bool growing;
+    bool alive;
     
 public:
-    Snake() : dir(RIGHT), growing(false) {
-        int startX = GRID_SIZE / 2;
-        int startY = GRID_SIZE / 2;
+    Snake(int startX = GRID_SIZE / 2, int startY = GRID_SIZE / 2, Direction startDir = RIGHT)
+        : dir(startDir), growing(false), alive(true) {
         for (int i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
-            body.push_back(Position(startX - i, startY));
+            switch (startDir) {
+                case RIGHT: body.push_back(Position(startX - i, startY)); break;
+                case LEFT:  body.push_back(Position(startX + i, startY)); break;
+                case DOWN:  body.push_back(Position(startX, startY - i)); break;
+                case UP:    body.push_back(Position(startX, startY + i)); break;
+            }
         }
     }
     
@@ -273,16 +278,22 @@ public:
         }
         return false;
     }
+
+    bool isAlive() const { return alive; }
+    void kill() { alive = false; }
 };
 
 // GameBoard Class
 class GameBoard {
 private:
-    Snake snake;
+    Snake snake1;
+    Snake snake2;
     Food food;
-    int score;
+    int score1;
+    int score2;
     int highScore;
     bool gameOver;
+    int loser; // 0 = none, 1 = player1, 2 = player2, 3 = both
     mutable bool firstRender;
     
     void loadHighScore() {
@@ -296,8 +307,9 @@ private:
     }
     
     void saveHighScore() {
-        if (score > highScore) {
-            highScore = score;
+        int bestScore = (score1 > score2) ? score1 : score2;
+        if (bestScore > highScore) {
+            highScore = bestScore;
             ofstream file("highscore.txt");
             if (file.is_open()) {
                 file << highScore;
@@ -307,48 +319,77 @@ private:
     }
     
     void ensureFoodNotOnSnake() {
-        while (snake.isOnPosition(food.getPosition())) {
+        while (snake1.isOnPosition(food.getPosition()) || snake2.isOnPosition(food.getPosition())) {
             food.spawn();
         }
     }
     
 public:
-    GameBoard() : score(0), gameOver(false), firstRender(true) {
+    GameBoard()
+        : snake1(GRID_SIZE / 2 - 4, GRID_SIZE / 2, RIGHT),
+          snake2(GRID_SIZE / 2 + 4, GRID_SIZE / 2, LEFT),
+          score1(0), score2(0), gameOver(false), loser(0), firstRender(true) {
         loadHighScore();
         ensureFoodNotOnSnake();
     }
     
     void handleInput(char input) {
         switch (input) {
-            case 'w': case 'W': snake.setDirection(UP); break;
-            case 's': case 'S': snake.setDirection(DOWN); break;
-            case 'a': case 'A': snake.setDirection(LEFT); break;
-            case 'd': case 'D': snake.setDirection(RIGHT); break;
+            case 'I': snake1.setDirection(UP); break;
+            case 'K': snake1.setDirection(DOWN); break;
+            case 'J': snake1.setDirection(LEFT); break;
+            case 'L': snake1.setDirection(RIGHT); break;
+            case 'w': case 'W': snake2.setDirection(UP); break;
+            case 's': case 'S': snake2.setDirection(DOWN); break;
+            case 'a': case 'A': snake2.setDirection(LEFT); break;
+            case 'd': case 'D': snake2.setDirection(RIGHT); break;
         }
     }
     
     void update() {
         if (gameOver) return;
         
-        snake.move();
-        Position head = snake.getHead();
-        
-        if (head.x < 0 || head.x >= GRID_SIZE || 
-            head.y < 0 || head.y >= GRID_SIZE) {
+        snake1.move();
+        snake2.move();
+
+        Position head1 = snake1.getHead();
+        Position head2 = snake2.getHead();
+
+        bool snake1Dead = false;
+        bool snake2Dead = false;
+
+        if (head1.x < 0 || head1.x >= GRID_SIZE || head1.y < 0 || head1.y >= GRID_SIZE) {
+            snake1Dead = true;
+        }
+        if (head2.x < 0 || head2.x >= GRID_SIZE || head2.y < 0 || head2.y >= GRID_SIZE) {
+            snake2Dead = true;
+        }
+
+        if (snake1.checkSelfCollision()) snake1Dead = true;
+        if (snake2.checkSelfCollision()) snake2Dead = true;
+
+        if (snake2.isOnPosition(head1)) snake1Dead = true;
+        if (snake1.isOnPosition(head2)) snake2Dead = true;
+
+        if (snake1Dead || snake2Dead) {
             gameOver = true;
+            if (snake1Dead) snake1.kill();
+            if (snake2Dead) snake2.kill();
+            if (snake1Dead && snake2Dead) loser = 3;
+            else if (snake1Dead) loser = 1;
+            else loser = 2;
             saveHighScore();
             return;
         }
         
-        if (snake.checkSelfCollision()) {
-            gameOver = true;
-            saveHighScore();
-            return;
-        }
-        
-        if (head == food.getPosition()) {
-            snake.grow();
-            score+=10;
+        if (head1 == food.getPosition()) {
+            snake1.grow();
+            score1 += 10;
+            food.spawn();
+            ensureFoodNotOnSnake();
+        } else if (head2 == food.getPosition()) {
+            snake2.grow();
+            score2 += 10;
             food.spawn();
             ensureFoodNotOnSnake();
         }
@@ -374,7 +415,7 @@ public:
             buffer << "    ┃  ▓▒░   💥 G A M E   O V E R 💥   ░▒▓   ┃\n";
             buffer << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n";
             buffer << "                                            \n";
-            buffer << "          🏆 Final Score: " << score << "                 \n";
+            buffer << "          P1 Score: " << score1 << "   P2 Score: " << score2 << "        \n";
             buffer << "          ⭐ High Score:  " << highScore << "                 \n";
             buffer << "                                             \n";
             buffer << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n";
@@ -394,7 +435,7 @@ public:
             buffer << "\n    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n";
             buffer << "    ┃         ** SNAKE GAME **              ┃\n";
             buffer << "    ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n";
-            buffer << "       Score: " << score << "  |  High Score: " << highScore << "          \n";
+            buffer << "       P1: " << score1 << "  |  P2: " << score2 << "  |  High: " << highScore << "     \n";
             buffer << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n";
             
             // Game board with controls side by side
@@ -406,9 +447,9 @@ public:
             buffer << "    ┃";
             for (int x = 0; x < GRID_SIZE; x++) {
                 Position current(x, 0);
-                if (snake.getHead() == current) {
+                if (snake1.getHead() == current || snake2.getHead() == current) {
                     buffer << "🐍";
-                } else if (snake.isOnPosition(current)) {
+                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                     buffer << "🔵";
                 } else if (food.getPosition() == current) {
                     buffer << "🍎";
@@ -422,9 +463,9 @@ public:
             buffer << "    ┃";
             for (int x = 0; x < GRID_SIZE; x++) {
                 Position current(x, 1);
-                if (snake.getHead() == current) {
+                if (snake1.getHead() == current || snake2.getHead() == current) {
                     buffer << "🐍";
-                } else if (snake.isOnPosition(current)) {
+                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                     buffer << "🔵";
                 } else if (food.getPosition() == current) {
                     buffer << "🍎";
@@ -439,9 +480,9 @@ public:
                 buffer << "    ┃";
                 for (int x = 0; x < GRID_SIZE; x++) {
                     Position current(x, y);
-                    if (snake.getHead() == current) {
+                    if (snake1.getHead() == current || snake2.getHead() == current) {
                         buffer << "🐍";
-                    } else if (snake.isOnPosition(current)) {
+                    } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                         buffer << "🔵";
                     } else if (food.getPosition() == current) {
                         buffer << "🍎";
@@ -466,9 +507,9 @@ public:
             buffer << "    ┃";
             for (int x = 0; x < GRID_SIZE; x++) {
                 Position current(x, 8);
-                if (snake.getHead() == current) {
+                if (snake1.getHead() == current || snake2.getHead() == current) {
                     buffer << "🐍";
-                } else if (snake.isOnPosition(current)) {
+                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                     buffer << "🔵";
                 } else if (food.getPosition() == current) {
                     buffer << "🍎";
@@ -482,9 +523,9 @@ public:
             buffer << "    ┃";
             for (int x = 0; x < GRID_SIZE; x++) {
                 Position current(x, 9);
-                if (snake.getHead() == current) {
+                if (snake1.getHead() == current || snake2.getHead() == current) {
                     buffer << "🐍";
-                } else if (snake.isOnPosition(current)) {
+                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                     buffer << "🔵";
                 } else if (food.getPosition() == current) {
                     buffer << "🍎";
@@ -499,9 +540,9 @@ public:
                 buffer << "    ┃";
                 for (int x = 0; x < GRID_SIZE; x++) {
                     Position current(x, y);
-                    if (snake.getHead() == current) {
+                    if (snake1.getHead() == current || snake2.getHead() == current) {
                         buffer << "🐍";
-                    } else if (snake.isOnPosition(current)) {
+                    } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                         buffer << "🔵";
                     } else if (food.getPosition() == current) {
                         buffer << "🍎";
@@ -520,9 +561,9 @@ public:
             buffer << "    ┃";
             for (int x = 0; x < GRID_SIZE; x++) {
                 Position current(x, GRID_SIZE - 1);
-                if (snake.getHead() == current) {
+                if (snake1.getHead() == current || snake2.getHead() == current) {
                     buffer << "🐍";
-                } else if (snake.isOnPosition(current)) {
+                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
                     buffer << "🔵";
                 } else if (food.getPosition() == current) {
                     buffer << "🍎";
@@ -545,10 +586,13 @@ public:
     bool isGameOver() const { return gameOver; }
     
     void reset() {
-        snake = Snake();
+        snake1 = Snake(GRID_SIZE / 2 - 4, GRID_SIZE / 2, RIGHT);
+        snake2 = Snake(GRID_SIZE / 2 + 4, GRID_SIZE / 2, LEFT);
         food = Food();
-        score = 0;
+        score1 = 0;
+        score2 = 0;
         gameOver = false;
+        loser = 0;
         firstRender = true;
         ensureFoodNotOnSnake();
     }
@@ -580,7 +624,7 @@ int main() {
                 sleepMs(10);
             }
         } else {
-            if (kbhit()) {
+            while (kbhit()) {
                 input = getArrowKey();
                 if (input == 'q' || input == 'Q') {
                     cleanupConsole();
