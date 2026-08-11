@@ -398,6 +398,16 @@ public:
     void render() const {
         // Build complete frame in buffer
         ostringstream buffer;
+
+        auto cellSymbol = [&](int x, int y) -> const char* {
+            Position current(x, y);
+            if (snake1.getHead() == current) return "🐍";
+            if (snake1.isOnPosition(current)) return "🔵";
+            if (snake2.getHead() == current) return "🟡";
+            if (snake2.isOnPosition(current)) return "🟢";
+            if (food.getPosition() == current) return "🍎";
+            return "▒▒";
+        };
         
         if (gameOver) {
             // When game over, clear screen completely and show only game over screen
@@ -415,8 +425,17 @@ public:
             buffer << "    ┃  ▓▒░   💥 G A M E   O V E R 💥   ░▒▓   ┃\n";
             buffer << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n";
             buffer << "                                            \n";
-            buffer << "          P1 Score: " << score1 << "   P2 Score: " << score2 << "        \n";
+            buffer << "          🐍 Player 1 Score: " << score1 << "            \n";
+            buffer << "          🟡 Player 2 Score: " << score2 << "            \n";
             buffer << "          ⭐ High Score:  " << highScore << "                 \n";
+            buffer << "                                             \n";
+            if (loser == 3) {
+                buffer << "          🤝 Both snakes crashed - draw!         \n";
+            } else if (loser == 1) {
+                buffer << "          🏁 Player 1 lost! Player 2 wins!      \n";
+            } else if (loser == 2) {
+                buffer << "          🏁 Player 2 lost! Player 1 wins!      \n";
+            }
             buffer << "                                             \n";
             buffer << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n";
             buffer << "    ┃                                        ┃\n";
@@ -433,9 +452,9 @@ public:
             
             // Show normal game board
             buffer << "\n    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n";
-            buffer << "    ┃         ** SNAKE GAME **              ┃\n";
+            buffer << "    ┃      ** MULTIPLAYER SNAKE GAME **     ┃\n";
             buffer << "    ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n";
-            buffer << "       P1: " << score1 << "  |  P2: " << score2 << "  |  High: " << highScore << "     \n";
+            buffer << "     🐍 P1: " << score1 << "   🟡 P2: " << score2 << "   ⭐ High: " << highScore << "     \n";
             buffer << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n";
             
             // Game board with controls side by side
@@ -445,111 +464,45 @@ public:
             
             // First row with controls header
             buffer << "    ┃";
-            for (int x = 0; x < GRID_SIZE; x++) {
-                Position current(x, 0);
-                if (snake1.getHead() == current || snake2.getHead() == current) {
-                    buffer << "🐍";
-                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                    buffer << "🔵";
-                } else if (food.getPosition() == current) {
-                    buffer << "🍎";
-                } else {
-                    buffer << "▒▒";
-                }
-            }
+            for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, 0);
             buffer << "┃    ┃         🎮 CONTROLS           ┃\n";
             
             // Second row
             buffer << "    ┃";
-            for (int x = 0; x < GRID_SIZE; x++) {
-                Position current(x, 1);
-                if (snake1.getHead() == current || snake2.getHead() == current) {
-                    buffer << "🐍";
-                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                    buffer << "🔵";
-                } else if (food.getPosition() == current) {
-                    buffer << "🍎";
-                } else {
-                    buffer << "▒▒";
-                }
-            }
+            for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, 1);
             buffer << "┃    ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n";
             
             // Rows 3-8 (showing keyboard)
             for (int y = 2; y < 8; y++) {
                 buffer << "    ┃";
-                for (int x = 0; x < GRID_SIZE; x++) {
-                    Position current(x, y);
-                    if (snake1.getHead() == current || snake2.getHead() == current) {
-                        buffer << "🐍";
-                    } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                        buffer << "🔵";
-                    } else if (food.getPosition() == current) {
-                        buffer << "🍎";
-                    } else {
-                        buffer << "▒▒";
-                    }
-                }
+                for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, y);
                 buffer << "┃    ┃";
                 
                 // Add control text based on row
                 switch(y) {
-                    case 2: buffer << "                               ┃\n"; break;
+                    case 2: buffer << "  🐍 P1: Arrows  🟡 P2: WASD   ┃\n"; break;
                     case 3: buffer << "    ┌───┐            ┌───┐     ┃\n"; break;
-                    case 4: buffer << "    │ W │            │ ↑ │     ┃\n"; break;
+                    case 4: buffer << "    │ ↑ │            │ W │     ┃\n"; break;
                     case 5: buffer << " ┌──┼───┼──┐      ┌──┼───┼──┐  ┃\n"; break;
-                    case 6: buffer << " │A │ S │ D│      │← │ ↓ │ →│  ┃\n"; break;
+                    case 6: buffer << " │← │ ↓ │ →│      │A │ S │ D│  ┃\n"; break;
                     case 7: buffer << " └──┴───┴──┘      └──┴───┴──┘  ┃\n"; break;
                 }
             }
             
             // Row 9
             buffer << "    ┃";
-            for (int x = 0; x < GRID_SIZE; x++) {
-                Position current(x, 8);
-                if (snake1.getHead() == current || snake2.getHead() == current) {
-                    buffer << "🐍";
-                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                    buffer << "🔵";
-                } else if (food.getPosition() == current) {
-                    buffer << "🍎";
-                } else {
-                    buffer << "▒▒";
-                }
-            }
+            for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, 8);
             buffer << "┃    ┃                               ┃\n";
             
             // Row 10
             buffer << "    ┃";
-            for (int x = 0; x < GRID_SIZE; x++) {
-                Position current(x, 9);
-                if (snake1.getHead() == current || snake2.getHead() == current) {
-                    buffer << "🐍";
-                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                    buffer << "🔵";
-                } else if (food.getPosition() == current) {
-                    buffer << "🍎";
-                } else {
-                    buffer << "▒▒";
-                }
-            }
+            for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, 9);
             buffer << "┃    ┃                               ┃\n";
             
             // Remaining rows (11-19)
             for (int y = 10; y < GRID_SIZE - 1; y++) {
                 buffer << "    ┃";
-                for (int x = 0; x < GRID_SIZE; x++) {
-                    Position current(x, y);
-                    if (snake1.getHead() == current || snake2.getHead() == current) {
-                        buffer << "🐍";
-                    } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                        buffer << "🔵";
-                    } else if (food.getPosition() == current) {
-                        buffer << "🍎";
-                    } else {
-                        buffer << "▒▒";
-                    }
-                }
+                for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, y);
                 buffer << "┃    ┃";
                 
                 if (y == 10) buffer << " ❌ Q - Quit                   ┃\n";
@@ -559,18 +512,7 @@ public:
             
             // Last row
             buffer << "    ┃";
-            for (int x = 0; x < GRID_SIZE; x++) {
-                Position current(x, GRID_SIZE - 1);
-                if (snake1.getHead() == current || snake2.getHead() == current) {
-                    buffer << "🐍";
-                } else if (snake1.isOnPosition(current) || snake2.isOnPosition(current)) {
-                    buffer << "🔵";
-                } else if (food.getPosition() == current) {
-                    buffer << "🍎";
-                } else {
-                    buffer << "▒▒";
-                }
-            }
+            for (int x = 0; x < GRID_SIZE; x++) buffer << cellSymbol(x, GRID_SIZE - 1);
             buffer << "┃    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n";
             
             buffer << "    ┗";
