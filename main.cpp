@@ -33,6 +33,24 @@ struct Position {
     }
 };
 
+class RandomSource {
+public:
+    virtual ~RandomSource() = default;
+    virtual int next(int upperExclusive) = 0;
+};
+
+class CStdlibRandomSource : public RandomSource {
+public:
+    int next(int upperExclusive) override {
+        return rand() % upperExclusive;
+    }
+};
+
+RandomSource& productionRandomSource() {
+    static CStdlibRandomSource source;
+    return source;
+}
+
 // Platform-specific terminal control functions
 #ifdef _WIN32
     void clearScreen() {
@@ -200,12 +218,16 @@ struct Position {
 class Food {
 private:
     Position pos;
+    RandomSource& randomSource;
 public:
-    Food() { spawn(); }
-    
+    explicit Food(RandomSource& source = productionRandomSource())
+        : randomSource(source) {
+        spawn();
+    }
+
     void spawn() {
-        pos.x = rand() % GRID_SIZE;
-        pos.y = rand() % GRID_SIZE;
+        pos.x = randomSource.next(GRID_SIZE);
+        pos.y = randomSource.next(GRID_SIZE);
     }
     
     Position getPosition() const { return pos; }
@@ -313,7 +335,8 @@ private:
     }
     
 public:
-    GameBoard() : score(0), gameOver(false), firstRender(true) {
+    explicit GameBoard(RandomSource& randomSource = productionRandomSource())
+        : food(randomSource), score(0), gameOver(false), firstRender(true) {
         loadHighScore();
         ensureFoodNotOnSnake();
     }
@@ -543,10 +566,10 @@ public:
     }
     
     bool isGameOver() const { return gameOver; }
-    
+
     void reset() {
         snake = Snake();
-        food = Food();
+        food.spawn();
         score = 0;
         gameOver = false;
         firstRender = true;
